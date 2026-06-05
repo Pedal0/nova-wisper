@@ -12,7 +12,6 @@ from pathlib import Path
 ROOT      = Path(__file__).resolve().parents[1]
 MODELS    = ROOT / "models"
 DIST      = ROOT / "dist"
-SPEC      = ROOT / "Nova.spec"
 CONFIG    = ROOT / "config.yaml"
 
 
@@ -29,13 +28,14 @@ def _check_models() -> bool:
 
 
 def _compile(debug: bool) -> bool:
+    # Debug builds use NovaDebug.spec (console=True); release use Nova.spec (console=False).
+    # PyInstaller does not accept --console/--name alongside a .spec file.
+    spec = ROOT / ("NovaDebug.spec" if debug else "Nova.spec")
     print(f"Compiling with PyInstaller ({'debug' if debug else 'release'})...")
-    cmd = ["uv", "run", "pyinstaller", "--clean"]
-    if debug:
-        # Override console=False from spec so errors are visible
-        cmd += ["--console", "--name", "NovaDebug"]
-    cmd.append(str(SPEC))
-    result = subprocess.run(cmd, cwd=ROOT)
+    result = subprocess.run(
+        ["uv", "run", "pyinstaller", "--clean", str(spec)],
+        cwd=ROOT,
+    )
     if result.returncode != 0:
         print("ERROR: PyInstaller failed.")
         return False

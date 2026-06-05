@@ -66,8 +66,10 @@ Nova uses [uv](https://github.com/astral-sh/uv) for dependency management.
 
 ```bash
 pip install uv
-uv sync
+uv sync --extra dev
 ```
+
+> `--extra dev` installs PyInstaller alongside the runtime dependencies. Omit it if you only want to run Nova without building the executable.
 
 ### 3. Download the model
 

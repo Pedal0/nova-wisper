@@ -22,7 +22,7 @@ def main() -> int:
     urllib.request.urlretrieve(URL, ARCHIVE)
     print("Extracting ...")
     with tarfile.open(ARCHIVE, "r:bz2") as tar:
-        tar.extractall(MODELS_DIR)
+        tar.extractall(MODELS_DIR, filter="data")
     ARCHIVE.unlink(missing_ok=True)
     print(f"Done -> {EXTRACTED}")
     return 0

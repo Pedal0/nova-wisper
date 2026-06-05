@@ -1,7 +1,7 @@
 [project]
 name = "wisper"
 version = "0.2.0"
-description = "Local Windows voice dictation push-to-talk speech-to-text"
+description = "Local Windows voice dictation — push-to-talk speech-to-text"
 requires-python = ">=3.11"
 dependencies = [
     "sherpa-onnx>=1.10.0",
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "pyinstaller>=6.0"]
 
 [project.scripts]
 nova = "wisper.app:main"

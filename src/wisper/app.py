@@ -5,6 +5,24 @@ import sys
 import threading
 from pathlib import Path
 
+# Windows: preload sherpa-onnx's bundled onnxruntime.dll before importing any
+# wisper module. C:\Windows\System32\onnxruntime.dll (v1.17, Windows AI
+# component) otherwise shadows sherpa-onnx's v1.24, causing a fatal API
+# version mismatch. Loading by full path first registers the module name in
+# the process DLL cache; sherpa-onnx's C extension then reuses it.
+if sys.platform == "win32":
+    def _preload_ort() -> None:
+        import ctypes, importlib.util, os
+        if getattr(sys, "frozen", False):
+            p = os.path.join(sys._MEIPASS, "onnxruntime.dll")
+        else:
+            s = importlib.util.find_spec("sherpa_onnx")
+            p = os.path.join(os.path.dirname(s.origin), "lib", "onnxruntime.dll") if s else ""
+        if p and os.path.exists(p):
+            ctypes.CDLL(p)
+    _preload_ort()
+    del _preload_ort
+
 from wisper.audio_capture import AudioCapture
 from wisper.config import Config, load_config
 from wisper.hotkey import HotkeyListener

@@ -32,7 +32,7 @@ def main() -> int:
     model_dir = _root() / cfg.model_dir
     if not model_dir.exists():
         logger.error(
-            "Model not found: %s run: uv run python scripts/download_model.py",
+            "Model not found: %s — run: uv run python scripts/download_model.py",
             model_dir,
         )
         return 1

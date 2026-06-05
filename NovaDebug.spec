@@ -1,12 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
+# Debug build: same as Nova.spec but with a visible console window.
+# Use: uv run python scripts/build.py --debug
+from PyInstaller.utils.hooks import collect_all
+
+datas = [('config.yaml', '.')]
+binaries = []
+hiddenimports = ['wisper.overlay']
+tmp_ret = collect_all('sherpa_onnx')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
     ['src\\wisper\\app.py'],
     pathex=[],
-    binaries=[],
-    datas=[('config.yaml', '.'), ('commands.yaml', '.')],
-    hiddenimports=['wisper.commands'],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -35,4 +44,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['assets\\nova.ico'],
 )

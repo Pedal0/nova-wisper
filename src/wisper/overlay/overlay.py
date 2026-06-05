@@ -318,7 +318,7 @@ class OverlayHUD:
             return  # nothing to do
 
         if cur.startswith(full):
-            # ASR shortened the text (correction) truncate without retyping
+            # ASR shortened the text (correction) — truncate without retyping
             self._current_text = full
             if self._canvas:
                 self._canvas.itemconfig(self._text_id, text=self._visible_text(full))

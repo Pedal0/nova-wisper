@@ -1,0 +1,8 @@
+hotkey: "right ctrl"        # push-to-talk key (hold to record)
+partial_interval_sec: 0.7  # partial transcription refresh rate (seconds)
+device: "cpu"              # "cpu" | "cuda"
+model_dir: "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
+overlay_position: "bottom-center"
+overlay_width: 220
+inject_min_chars: 1        # minimum characters required to inject text
+log_level: "INFO"

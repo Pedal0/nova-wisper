@@ -56,7 +56,7 @@ Nova uses the **sherpa-onnx Parakeet-TDT 0.6B v3 INT8** model a quantized export
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Pedal0/nova.git
+git clone https://github.com/Pedal0/nova-wisper.git
 cd nova
 ```
 

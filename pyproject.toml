@@ -12,6 +12,7 @@ dependencies = [
     "pystray>=0.19.5",
     "pillow>=10.0",
     "pyyaml>=6.0",
+    "sherpa-onnx-core>=1.13.2",
 ]
 
 [project.optional-dependencies]

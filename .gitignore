@@ -6,4 +6,3 @@ models/
 *.egg-info/
 dist/
 build/
-*.spec

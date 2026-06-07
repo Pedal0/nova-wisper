@@ -227,6 +227,11 @@ class OverlayHUD:
         if self._root and self._visible:
             self._root.after(0, self._start_type, text)
 
+    def schedule(self, func: "Callable[[], None]") -> None:
+        """Marshal *func* onto the tkinter main thread.  Thread-safe."""
+        if self._root:
+            self._root.after(0, func)
+
     def close(self) -> None:
         if self._root:
             self._root.after(0, self._root.destroy)

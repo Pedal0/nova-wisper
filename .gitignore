@@ -6,3 +6,4 @@ models/
 *.egg-info/
 dist/
 build/
+notes.json

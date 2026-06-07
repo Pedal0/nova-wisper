@@ -18,27 +18,33 @@ def _make_icon() -> Image.Image:
 
 
 class TrayApp:
-    """System tray icon: toggles listening, quits the app."""
+    """System tray icon: toggles listening, opens notes, quits the app."""
 
     def __init__(
         self,
         on_toggle: Callable[[bool], None],
         on_quit: Callable[[], None],
+        on_notes: Callable[[], None] | None = None,
     ) -> None:
         self._on_toggle = on_toggle
         self._on_quit = on_quit
         self._listening = True
+
+        menu_items: list[pystray.MenuItem] = [
+            pystray.MenuItem(
+                lambda item: "Listening: ON" if self._listening else "Listening: OFF",
+                self._toggle,
+            ),
+        ]
+        if on_notes is not None:
+            menu_items.append(pystray.MenuItem("Notes", on_notes))
+        menu_items.append(pystray.MenuItem("Quit", self._quit))
+
         self._icon = pystray.Icon(
             "nova",
             _make_icon(),
             "Nova voice dictation",
-            menu=pystray.Menu(
-                pystray.MenuItem(
-                    lambda item: "Listening: ON" if self._listening else "Listening: OFF",
-                    self._toggle,
-                ),
-                pystray.MenuItem("Quit", self._quit),
-            ),
+            menu=pystray.Menu(*menu_items),
         )
 
     def _toggle(self) -> None:

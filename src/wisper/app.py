@@ -28,6 +28,7 @@ from wisper.config import Config, load_config
 from wisper.hotkey import HotkeyListener
 from wisper.injector import TextInjector
 from wisper.logging_setup import setup_logging
+from wisper.notes import NoteManager
 from wisper.orchestrator import Orchestrator
 from wisper.overlay import OverlayHUD
 from wisper.transcriber import Transcriber
@@ -61,6 +62,14 @@ def main() -> int:
     injector = TextInjector()
     overlay = OverlayHUD(width=cfg.overlay_width)
 
+    # overlay.schedule() safely no-ops if the tk root isn't ready yet.
+    # Actual UI calls only happen after overlay.create_window() (below), so the
+    # ordering here is safe.
+    notes = NoteManager(
+        schedule_ui=overlay.schedule,
+        data_path=_root() / "notes.json",
+    )
+
     orch = Orchestrator(
         audio=audio,
         transcriber=transcriber,
@@ -68,6 +77,7 @@ def main() -> int:
         injector=injector,
         partial_interval_sec=cfg.partial_interval_sec,
         inject_min_chars=cfg.inject_min_chars,
+        note_callback=notes.on_note,
     )
 
     listening = True
@@ -93,7 +103,7 @@ def main() -> int:
         hotkey.stop()
         overlay.close()
 
-    tray = TrayApp(on_toggle=on_toggle, on_quit=on_quit)
+    tray = TrayApp(on_toggle=on_toggle, on_quit=on_quit, on_notes=notes.open_window)
     overlay.create_window()
 
     def _start_background() -> None:

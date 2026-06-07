@@ -136,6 +136,32 @@ The hotkey can be changed in `config.yaml` (see [Configuration](#configuration))
 
 ---
 
+## Voice Commands
+
+Certain phrases are intercepted before text is injected and trigger built-in actions instead.
+
+### Notes
+
+Say **`nova note <your text>`** to capture an idea without injecting anything into the active window.
+
+```
+nova note call dentist tomorrow
+nova note buy oat milk and bread
+nova note the API key expires on the 15th
+```
+
+The note is saved instantly to `notes.json` (next to `Nova.exe`, or at the project root in dev) and the **Nova Notes** window opens automatically.
+
+Saying **`nova note`** alone (no content) opens the notepad without saving.
+
+The notepad lets you:
+- **Copy** any note to the clipboard with one click
+- **Edit** a note inline (confirm with **Ctrl+Enter**, cancel with **Escape**)
+- **Delete** individual notes
+- Re-open at any time via the system tray → **Notes**
+
+---
+
 ## System Tray
 
 Right-click the Nova icon in the taskbar notification area:
@@ -144,6 +170,7 @@ Right-click the Nova icon in the taskbar notification area:
 |---|---|
 | **Listening: ON** | Click to disable the hotkey (no recording) |
 | **Listening: OFF** | Click to re-enable the hotkey |
+| **Notes** | Opens the Nova Notes window |
 | **Quit** | Closes Nova |
 
 ---
@@ -177,6 +204,7 @@ nova/
 │   ├── transcriber.py   # sherpa-onnx wrapper
 │   ├── injector.py      # text injection via pynput
 │   ├── hotkey.py        # push-to-talk key listener
+│   ├── notes.py         # voice note capture + notepad UI
 │   ├── overlay/         # animated glass pill HUD
 │   ├── tray.py          # system tray icon
 │   ├── config.py        # configuration dataclass

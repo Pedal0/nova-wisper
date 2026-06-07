@@ -83,9 +83,12 @@ class Orchestrator:
         full = self.transcriber.transcribe(self.audio.stop()).strip()
         self.overlay.hide()
 
-        # Check for "nova note [...]" before injecting
+        # Check for "nova note [...]" before injecting.
+        # Strip trailing punctuation first: the ASR often adds a period or comma
+        # at the end (e.g. "Nova note." or "Nova note buy milk."), which would
+        # cause the end-anchor $ to fail.
         if self.note_callback:
-            m = _NOTE_RE.match(full)
+            m = _NOTE_RE.match(full.rstrip(" .,!?;:"))
             if m is not None:
                 content = (m.group(1) or "").strip() or None
                 logger.info("Note trigger: %r", content)

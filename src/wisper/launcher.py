@@ -82,28 +82,83 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
-def _call_llm(text: str, app_names: list[str], llm_cfg: dict) -> dict | None:
+def _extract_commands(text: str) -> list[dict]:
+    """
+    Extract one or more {app_name, action} commands from LLM output.
+
+    Handles:
+    - JSON array  [{"app_name": "Discord", "action": "open"}, ...]
+    - Single dict {"app_name": "Discord", "action": "open"}
+    - Markdown fences, prose prefix/suffix, single-quoted dicts
+    - Any number of commands in one response
+    """
+    # Strip markdown code fences first
+    cleaned = re.sub(r"```(?:json)?\s*", "", text)
+    cleaned = re.sub(r"```\s*$", "", cleaned).strip()
+
+    def _parse_item(obj: object) -> dict | None:
+        if isinstance(obj, dict) and "app_name" in obj and "action" in obj:
+            return obj
+        return None
+
+    # 1. Direct parse — handles clean array or single dict
+    try:
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, list):
+            return [r for r in map(_parse_item, parsed) if r]
+        item = _parse_item(parsed)
+        if item:
+            return [item]
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Find a [...] array anywhere in the text
+    m_arr = re.search(r"\[.*?\]", cleaned, re.DOTALL)
+    if m_arr:
+        try:
+            parsed = json.loads(m_arr.group(0))
+            if isinstance(parsed, list):
+                items = [r for r in map(_parse_item, parsed) if r]
+                if items:
+                    return items
+        except json.JSONDecodeError:
+            pass
+
+    # 3. Collect every {...} block — single-command responses and tiny-model output
+    commands: list[dict] = []
+    for block in re.findall(r"\{[^{}]*\}", cleaned):
+        for candidate in (block, block.replace("'", '"')):
+            try:
+                item = _parse_item(json.loads(candidate))
+                if item and item not in commands:
+                    commands.append(item)
+                    break
+            except json.JSONDecodeError:
+                pass
+    return commands
+
+
+def _call_llm(text: str, app_names: list[str], llm_cfg: dict) -> list[dict]:
     """
     Single OpenAI-compatible POST to /v1/chat/completions.
 
     No tool calls — plain text response only, so this works with every model
     and every provider (OpenAI, Ollama, OpenRouter, OpenRouter free tier, etc.).
 
-    The system prompt instructs the model to reply with JSON only; _extract_json
-    handles noisy output from small/local models (markdown fences, prose prefix,
-    single-quoted dicts, etc.).
+    Supports chained commands: "nova open Discord and Steam" returns two items.
 
-    Returns {"app_name": "...", "action": "open"|"close"} or None.
-    Raises urllib.error.HTTPError / urllib.error.URLError on failures.
+    Returns list of {"app_name": "...", "action": "open"|"close"} dicts (empty on failure).
+    Raises urllib.error.HTTPError / urllib.error.URLError on network failures.
     """
     system_prompt = (
         f"You control desktop applications. "
         f"Available apps: {app_names}. "
-        "Based on the voice command, decide which app to open or close. "
+        "Based on the voice command, decide which apps to open or close. "
         "Words meaning OPEN: open, launch, start, ouvre, lance, démarre, ouvrir, lancer. "
         "Words meaning CLOSE: close, quit, exit, ferme, quitte, arrête, fermer, quitter. "
-        "Reply ONLY with valid JSON — no prose, no markdown, no explanation: "
-        '{"app_name": "<exact name from the list>", "action": "open" or "close"}'
+        "Reply ONLY with a JSON array — no prose, no markdown, no explanation. "
+        "One element per app mentioned. Example: "
+        '[{"app_name": "Discord", "action": "open"}, {"app_name": "Steam", "action": "open"}]'
     )
 
     payload = {
@@ -152,15 +207,13 @@ def _call_llm(text: str, app_names: list[str], llm_cfg: dict) -> dict | None:
         flags=re.DOTALL | re.IGNORECASE,
     ).strip()
 
-    result = _extract_json(cleaned_content)
-    # INFO so the raw model output is always visible in the console — helps
-    # diagnose prompt/model issues without restarting at DEBUG level.
+    commands = _extract_commands(cleaned_content)
     logger.info(
         "LLM response — raw: %r  →  parsed: %r",
         cleaned_content[:300],
-        result,
+        commands,
     )
-    return result
+    return commands
 
 
 class AppLauncher:
@@ -258,8 +311,16 @@ class AppLauncher:
 
     def _run(self, text: str) -> None:
         """Background thread: call the LLM, parse the result, execute the action."""
+        # Show what Nova heard while the LLM processes (wave bars + typewriter).
+        # Strips the "nova" trigger word so only the intent is shown:
+        #   "Nova lance Discord et Steam" → "lance Discord et Steam"
+        preview = text.strip().rstrip(".,!?;:")
+        if preview.lower().startswith("nova"):
+            preview = preview[4:].lstrip(" ,").strip()
+        self._overlay.flash(preview, duration_ms=30000)
+
         try:
-            result = _call_llm(text, [a["name"] for a in self._apps], self._llm)
+            commands = _call_llm(text, [a["name"] for a in self._apps], self._llm)
         except urllib.error.HTTPError as exc:
             # Read the response body — it contains the provider's error message
             # (e.g. "model not found", "invalid API key") which is far more
@@ -283,53 +344,57 @@ class AppLauncher:
             self._overlay.flash(f"Error: {exc}", duration_ms=3500)
             return
 
-        if result is None:
+        if not commands:
             self._overlay.flash("Could not parse LLM response.", duration_ms=3000)
             return
 
-        app_name = result.get("app_name", "")
-        action = result.get("action", "")
+        feedback: list[str] = []
+        not_found: list[str] = []
 
-        # Case-insensitive lookup so the LLM doesn't need to match capitalisation exactly
-        app = next(
-            (a for a in self._apps if a["name"].lower() == app_name.lower()),
-            None,
-        )
-        if app is None:
-            logger.warning("LLM returned an app not in the registry: %r", app_name)
-            self._overlay.flash(f"App not found: {app_name}", duration_ms=3000)
-            return
+        for cmd in commands:
+            app_name = cmd.get("app_name", "")
+            action   = cmd.get("action", "")
 
-        verb = "Launching" if action == "open" else "Closing"
-        logger.info("%s %s (path: %s)", verb, app["name"], app["path"])
-        self._overlay.flash(f"{verb} {app['name']}...")
+            app = next(
+                (a for a in self._apps if a["name"].lower() == app_name.lower()),
+                None,
+            )
+            if app is None:
+                logger.warning("LLM returned an app not in the registry: %r", app_name)
+                not_found.append(app_name)
+                continue
 
-        try:
-            if action == "open":
-                # os.startfile handles .exe, .lnk shortcuts, and any file
-                # association — unlike subprocess.Popen it doesn't need a list.
-                os.startfile(app["path"])  # noqa: S606
-            elif action == "close":
-                # Priority: explicit "exe" field → path heuristic.
-                # The heuristic works for simple .exe paths and shortcuts whose
-                # name matches the process (e.g. Discord.lnk → Discord.exe), but
-                # fails for shortcuts with long names (Google Chrome.lnk → chrome.exe).
-                if app.get("exe"):
-                    exe_name = app["exe"]
+            verb = "Launching" if action == "open" else "Closing"
+            logger.info("%s %s (path: %s)", verb, app["name"], app["path"])
+            feedback.append(f"{verb} {app['name']}")
+
+            try:
+                if action == "open":
+                    os.startfile(app["path"])  # noqa: S606
+                elif action == "close":
+                    if app.get("exe"):
+                        exe_name = app["exe"]
+                    else:
+                        p = Path(app["path"])
+                        exe_name = (p.stem + ".exe") if p.suffix.lower() == ".lnk" else p.name
+                    logger.info("taskkill /f /im %s", exe_name)
+                    subprocess.run(
+                        ["taskkill", "/f", "/im", exe_name],
+                        capture_output=True,
+                        check=False,
+                    )
                 else:
-                    p = Path(app["path"])
-                    exe_name = (p.stem + ".exe") if p.suffix.lower() == ".lnk" else p.name
-                logger.info("taskkill /f /im %s", exe_name)
-                subprocess.run(
-                    ["taskkill", "/f", "/im", exe_name],
-                    capture_output=True,
-                    check=False,
-                )
-            else:
-                logger.warning("LLM returned an unknown action: %r", action)
-        except Exception as exc:
-            logger.exception("Failed to %s %s", action, app["name"])
-            self._overlay.flash(f"Failed: {exc}", duration_ms=3500)
+                    logger.warning("LLM returned an unknown action: %r", action)
+            except Exception as exc:
+                logger.exception("Failed to %s %s", action, app["name"])
+                feedback.append(f"Failed: {exc}")
+
+        # Show one combined overlay message for all commands
+        if not_found:
+            feedback.append(f"Not found: {', '.join(not_found)}")
+        if feedback:
+            duration = 2000 + len(feedback) * 500
+            self._overlay.flash(", ".join(feedback) + "...", duration_ms=duration)
 
     # ── UI (all methods MUST run on the tk main thread) ───────────────────────
 

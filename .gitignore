@@ -7,3 +7,4 @@ models/
 dist/
 build/
 notes.json
+launcher.json

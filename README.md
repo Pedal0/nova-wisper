@@ -19,6 +19,8 @@ Nova runs entirely offline using NVIDIA's **Parakeet-TDT 0.6B v3** model quantiz
 - **Real-time preview** partial transcription displayed in the overlay while you speak
 - **Universal injection** types into any focused window via `SendInput`
 - **Offline** the model runs locally, nothing leaves your machine
+- **Voice notes** capture ideas hands-free with `nova note <text>`
+- **App launcher** open or close any app by voice via `nova open/close <app>`
 - **System tray** toggle listening on/off or quit from the taskbar icon
 
 ---
@@ -160,6 +162,48 @@ The notepad lets you:
 - **Delete** individual notes
 - Re-open at any time via the system tray → **Notes**
 
+### App Launcher
+
+Say **`nova <command>`** (any phrase starting with "nova" that is not a note command) to open or close a desktop application using an LLM.
+
+```
+nova open Discord
+nova close Chrome
+nova lance Spotify
+nova ferme le navigateur
+```
+
+Nova calls an OpenAI-compatible LLM API that interprets your intent and returns the app name and action. It works with **OpenAI**, **Ollama** (local models), and **OpenRouter**.
+
+#### Setup
+
+1. Open the **App Launcher** window from the system tray.
+2. In **LLM Configuration**, fill in:
+   - `Base URL` — e.g. `https://api.openai.com/v1` or `http://localhost:11434/v1` for Ollama
+   - `API Key` — your API key (use any string for Ollama)
+   - `Model` — e.g. `gpt-4o-mini` or `llama3`
+3. In **Registered Apps**, add each app with its display name and full executable path. Use the **...** button to browse.
+4. Click **Save** for the LLM settings, then **Add App** for each app.
+
+Settings are stored in `launcher.json` (next to `Nova.exe`, or at the project root in dev).
+
+#### How it works
+
+Nova sends the voice command and the list of registered app names to the LLM. The LLM returns a JSON object:
+
+```json
+{"app_name": "Discord", "action": "open"}
+```
+
+If the model supports tool calls (OpenAI, capable Ollama models), the structured tool response is used. If not (tiny local models), Nova falls back to parsing JSON from the response text. Both paths work transparently.
+
+- **Open:** `subprocess.Popen([path])`
+- **Close:** `taskkill /f /im <exe_name>`
+
+A brief overlay message confirms the action: *"Launching Discord..."* or *"Closing Discord..."*
+
+If the API key is not configured or no apps are registered, the App Launcher settings window opens automatically instead of crashing.
+
 ---
 
 ## System Tray
@@ -171,6 +215,7 @@ Right-click the Nova icon in the taskbar notification area:
 | **Listening: ON** | Click to disable the hotkey (no recording) |
 | **Listening: OFF** | Click to re-enable the hotkey |
 | **Notes** | Opens the Nova Notes window |
+| **App Launcher** | Opens the App Launcher settings window |
 | **Quit** | Closes Nova |
 
 ---
@@ -205,6 +250,7 @@ nova/
 │   ├── injector.py      # text injection via pynput
 │   ├── hotkey.py        # push-to-talk key listener
 │   ├── notes.py         # voice note capture + notepad UI
+│   ├── launcher.py      # app launcher/closer via LLM + settings UI
 │   ├── overlay/         # animated glass pill HUD
 │   ├── tray.py          # system tray icon
 │   ├── config.py        # configuration dataclass
@@ -212,7 +258,7 @@ nova/
 ├── scripts/
 │   ├── build.py         # build script (PyInstaller + asset assembly)
 │   └── download_model.py
-├── tests/
+├── tests/               # unit tests (pytest)
 ├── Nova.spec            # PyInstaller spec
 └── config.yaml
 ```

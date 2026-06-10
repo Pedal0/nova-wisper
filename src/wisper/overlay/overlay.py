@@ -227,6 +227,23 @@ class OverlayHUD:
         if self._root and self._visible:
             self._root.after(0, self._start_type, text)
 
+    def flash(self, message: str, duration_ms: int = 2000) -> None:
+        """
+        Briefly show a status message in the overlay, then auto-hide.
+
+        Designed for transient feedback like "Launching Discord..." or
+        "LLM error: connection refused".  Thread-safe: schedules onto the
+        main thread via root.after().
+        """
+        def _do() -> None:
+            self._visible = True
+            self._on_show()
+            self._start_type(message)
+            if self._root:
+                self._root.after(duration_ms, self.hide)
+        if self._root:
+            self._root.after(0, _do)
+
     def schedule(self, func: "Callable[[], None]") -> None:
         """Marshal *func* onto the tkinter main thread.  Thread-safe."""
         if self._root:

@@ -22,6 +22,11 @@ _NOTE_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# Matches any utterance that begins with the word "nova" — used to route
+# voice commands to the app launcher when the note trigger didn't fire.
+# Examples: "nova open discord", "nova ferme chrome", "nova launch spotify"
+_NOVA_PREFIX_RE = re.compile(r"^nova\b", re.IGNORECASE)
+
 
 class Orchestrator:
     """State machine: IDLE → CAPTURE → FINALISE → INJECT → IDLE."""
@@ -35,6 +40,7 @@ class Orchestrator:
         partial_interval_sec: float = 0.7,
         inject_min_chars: int = 1,
         note_callback: Callable[[str | None], None] | None = None,
+        app_callback: Callable[[str], None] | None = None,
     ) -> None:
         self.audio = audio
         self.transcriber = transcriber
@@ -43,6 +49,7 @@ class Orchestrator:
         self.partial_interval_sec = partial_interval_sec
         self.inject_min_chars = inject_min_chars
         self.note_callback = note_callback
+        self.app_callback = app_callback
         self._capturing = False
         self._partial_stop = threading.Event()
         self._partial_thread: threading.Thread | None = None
@@ -83,17 +90,28 @@ class Orchestrator:
         full = self.transcriber.transcribe(self.audio.stop()).strip()
         self.overlay.hide()
 
-        # Check for "nova note [...]" before injecting.
-        # Strip trailing punctuation first: the ASR often adds a period or comma
-        # at the end (e.g. "Nova note." or "Nova note buy milk."), which would
-        # cause the end-anchor $ to fail.
+        # ── Command routing ────────────────────────────────────────────────────
+        # Strip trailing punctuation: the ASR often appends "." or "," at the
+        # end (e.g. "Nova note." / "Nova open discord."), which would break
+        # end-anchored regex matches.  We only strip for routing; `full` is
+        # left intact for text injection below.
+        cleaned = full.rstrip(" .,!?;:")
+
+        # 1. Note trigger — must be checked FIRST so "nova note" never reaches
+        #    the app launcher.
         if self.note_callback:
-            m = _NOTE_RE.match(full.rstrip(" .,!?;:"))
+            m = _NOTE_RE.match(cleaned)
             if m is not None:
                 content = (m.group(1) or "").strip() or None
                 logger.info("Note trigger: %r", content)
                 self.note_callback(content)
                 return
+
+        # 2. App launcher trigger — any other "nova …" phrase.
+        if self.app_callback and _NOVA_PREFIX_RE.match(cleaned):
+            logger.info("App launcher trigger: %r", full)
+            self.app_callback(full)
+            return
 
         if len(full) >= self.inject_min_chars:
             logger.info("Injecting: %r", full)

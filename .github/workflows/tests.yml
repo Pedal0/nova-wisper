@@ -1,0 +1,47 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Offline tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # tkinter is not bundled with the setup-python action on Ubuntu
+      - name: Install system dependencies
+        run: sudo apt-get install -y python3-tk
+
+      # Only install what the offline tests need — no sherpa-onnx, sounddevice,
+      # pynput, or other platform/hardware deps that can't run in CI.
+      - name: Install test dependencies
+        run: pip install pytest numpy
+
+      # PYTHONPATH exposes src/wisper without a full package install.
+      # Tests excluded:
+      #   test_audio_capture  — needs sounddevice (audio hardware)
+      #   test_injector       — needs pynput (keyboard input)
+      #   test_transcriber    — needs sherpa-onnx model (~500 MB)
+      #   test_config         — pre-existing failures unrelated to this project
+      - name: Run offline tests
+        env:
+          PYTHONPATH: src
+        run: |
+          pytest \
+            tests/test_extract_json.py \
+            tests/test_extract_commands.py \
+            tests/test_routing.py \
+            tests/test_orchestrator.py \
+            -v

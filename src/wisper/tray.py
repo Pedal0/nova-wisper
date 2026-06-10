@@ -25,6 +25,7 @@ class TrayApp:
         on_toggle: Callable[[bool], None],
         on_quit: Callable[[], None],
         on_notes: Callable[[], None] | None = None,
+        on_launcher: Callable[[], None] | None = None,
     ) -> None:
         self._on_toggle = on_toggle
         self._on_quit = on_quit
@@ -38,6 +39,8 @@ class TrayApp:
         ]
         if on_notes is not None:
             menu_items.append(pystray.MenuItem("Notes", on_notes))
+        if on_launcher is not None:
+            menu_items.append(pystray.MenuItem("App Launcher", on_launcher))
         menu_items.append(pystray.MenuItem("Quit", self._quit))
 
         self._icon = pystray.Icon(

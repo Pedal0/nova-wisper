@@ -27,6 +27,7 @@ from wisper.audio_capture import AudioCapture
 from wisper.config import Config, load_config
 from wisper.hotkey import HotkeyListener
 from wisper.injector import TextInjector
+from wisper.launcher import AppLauncher
 from wisper.logging_setup import setup_logging
 from wisper.notes import NoteManager
 from wisper.orchestrator import Orchestrator
@@ -64,10 +65,15 @@ def main() -> int:
 
     # overlay.schedule() safely no-ops if the tk root isn't ready yet.
     # Actual UI calls only happen after overlay.create_window() (below), so the
-    # ordering here is safe.
+    # ordering here is safe for both NoteManager and AppLauncher.
     notes = NoteManager(
         schedule_ui=overlay.schedule,
         data_path=_root() / "notes.json",
+    )
+    launcher = AppLauncher(
+        schedule_ui=overlay.schedule,
+        overlay=overlay,
+        data_path=_root() / "launcher.json",
     )
 
     orch = Orchestrator(
@@ -78,6 +84,7 @@ def main() -> int:
         partial_interval_sec=cfg.partial_interval_sec,
         inject_min_chars=cfg.inject_min_chars,
         note_callback=notes.on_note,
+        app_callback=launcher.handle,
     )
 
     listening = True
@@ -103,7 +110,12 @@ def main() -> int:
         hotkey.stop()
         overlay.close()
 
-    tray = TrayApp(on_toggle=on_toggle, on_quit=on_quit, on_notes=notes.open_window)
+    tray = TrayApp(
+        on_toggle=on_toggle,
+        on_quit=on_quit,
+        on_notes=notes.open_window,
+        on_launcher=launcher.open_window,
+    )
     overlay.create_window()
 
     def _start_background() -> None:

@@ -1,8 +1,12 @@
 hotkey: "right ctrl"        # push-to-talk key (hold to record)
 partial_interval_sec: 0.7  # partial transcription refresh rate (seconds)
-device: "cpu"              # "cpu" | "cuda"
+device: "cuda"              # "cpu" | "cuda"
 model_dir: "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
 overlay_position: "bottom-center"
 overlay_width: 220
 inject_min_chars: 1        # minimum characters required to inject text
+realtime_typing: true      # transcribe in chunks while speaking; text is typed on key release
+silence_sec: 0.6           # pause length that ends a phrase (seconds)
+silence_threshold: 0.01    # RMS below this = silence (raise if your mic is noisy)
+max_chunk_sec: 12          # force a split after this long without a pause
 log_level: "INFO"

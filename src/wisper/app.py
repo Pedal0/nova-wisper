@@ -83,6 +83,10 @@ def main() -> int:
         injector=injector,
         partial_interval_sec=cfg.partial_interval_sec,
         inject_min_chars=cfg.inject_min_chars,
+        realtime_typing=cfg.realtime_typing,
+        silence_sec=cfg.silence_sec,
+        silence_threshold=cfg.silence_threshold,
+        max_chunk_sec=cfg.max_chunk_sec,
         note_callback=notes.on_note,
         app_callback=launcher.handle,
     )
@@ -110,11 +114,14 @@ def main() -> int:
         hotkey.stop()
         overlay.close()
 
+    # Startup toggle targets the packaged exe (frozen: itself; dev: dist build).
+    exe = Path(sys.executable) if getattr(sys, "frozen", False) else _root() / "dist" / "Nova.exe"
     tray = TrayApp(
         on_toggle=on_toggle,
         on_quit=on_quit,
         on_notes=notes.open_window,
         on_launcher=launcher.open_window,
+        startup_cmd=f'"{exe}"' if exe.exists() else None,
     )
     overlay.create_window()
 

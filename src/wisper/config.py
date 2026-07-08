@@ -15,6 +15,10 @@ class Config:
     overlay_position: str = "bottom-center"
     overlay_width: int = 220
     inject_min_chars: int = 1
+    realtime_typing: bool = True
+    silence_sec: float = 0.6
+    silence_threshold: float = 0.01
+    max_chunk_sec: float = 12.0
     log_level: str = "INFO"
 
 

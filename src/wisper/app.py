@@ -92,13 +92,14 @@ def main() -> int:
     )
 
     listening = True
+    paused = False
 
     def guarded_press() -> None:
-        if listening:
+        if listening and not paused:
             orch.on_press()
 
     def guarded_release() -> None:
-        if listening:
+        if listening and not paused:
             orch.on_release()
 
     hotkey = HotkeyListener(cfg.hotkey, on_press=guarded_press, on_release=guarded_release)
@@ -109,6 +110,20 @@ def main() -> int:
         nonlocal listening
         listening = state
         logger.info("Listening %s", "enabled" if state else "disabled")
+
+    def on_pause_toggle(want_paused: bool) -> None:
+        nonlocal paused
+        if want_paused:
+            transcriber.unload()
+            paused = True
+            logger.info("Nova paused — model unloaded, memory freed.")
+            overlay.flash("Nova paused", duration_ms=1500)
+        else:
+            overlay.flash("Nova resuming...", duration_ms=1500)
+            transcriber.load()
+            paused = False
+            logger.info("Nova resumed — model reloaded.")
+            overlay.flash("Nova ready", duration_ms=1200)
 
     def on_quit() -> None:
         hotkey.stop()
@@ -122,6 +137,7 @@ def main() -> int:
         on_notes=notes.open_window,
         on_launcher=launcher.open_window,
         startup_cmd=f'"{exe}"' if exe.exists() else None,
+        on_pause_toggle=on_pause_toggle,
     )
     overlay.create_window()
 

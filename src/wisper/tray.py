@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import winreg
 from collections.abc import Callable
 
@@ -54,11 +55,15 @@ class TrayApp:
         on_notes: Callable[[], None] | None = None,
         on_launcher: Callable[[], None] | None = None,
         startup_cmd: str | None = None,
+        on_pause_toggle: Callable[[bool], None] | None = None,
     ) -> None:
         self._on_toggle = on_toggle
         self._on_quit = on_quit
         self._startup_cmd = startup_cmd
+        self._on_pause_toggle = on_pause_toggle
         self._listening = True
+        self._paused = False
+        self._pause_busy = False
 
         menu_items: list[pystray.MenuItem] = [
             pystray.MenuItem(
@@ -70,6 +75,18 @@ class TrayApp:
             menu_items.append(pystray.MenuItem("Notes", on_notes))
         if on_launcher is not None:
             menu_items.append(pystray.MenuItem("App Launcher", on_launcher))
+        if on_pause_toggle is not None:
+            menu_items.append(
+                pystray.MenuItem(
+                    lambda item: (
+                        "Resuming..." if self._pause_busy and self._paused
+                        else "Pausing..." if self._pause_busy
+                        else "Resume (reload models)" if self._paused
+                        else "Pause (free memory)"
+                    ),
+                    self._toggle_pause,
+                )
+            )
         if startup_cmd is not None:
             menu_items.append(
                 pystray.MenuItem(
@@ -91,6 +108,25 @@ class TrayApp:
         self._listening = not self._listening
         self._on_toggle(self._listening)
         self._icon.update_menu()
+
+    def _toggle_pause(self) -> None:
+        if self._pause_busy or self._on_pause_toggle is None:
+            return
+        self._pause_busy = True
+        self._icon.update_menu()
+        target_paused = not self._paused
+
+        def run() -> None:
+            try:
+                self._on_pause_toggle(target_paused)
+                self._paused = target_paused
+            except Exception:
+                logger.exception("pause toggle failed")
+            finally:
+                self._pause_busy = False
+                self._icon.update_menu()
+
+        threading.Thread(target=run, daemon=True).start()
 
     def _toggle_startup(self) -> None:
         set_startup(None if startup_enabled() else self._startup_cmd)

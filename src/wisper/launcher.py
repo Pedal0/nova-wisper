@@ -193,7 +193,13 @@ def _call_llm(text: str, app_names: list[str], llm_cfg: dict) -> list[dict]:
     with urllib.request.urlopen(req, timeout=_LLM_TIMEOUT) as resp:
         data = json.loads(resp.read())
 
-    content = data["choices"][0]["message"].get("content", "") or ""
+    choices = data.get("choices")
+    if not choices:
+        err = data.get("error")
+        msg = err.get("message", str(err)) if isinstance(err, dict) else (err or "empty response")
+        raise RuntimeError(f"LLM provider error: {msg}")
+
+    content = choices[0]["message"].get("content", "") or ""
 
     # Reasoning models prepend a think-block before the actual answer.
     # Different models use different tag names — strip them all so _extract_json

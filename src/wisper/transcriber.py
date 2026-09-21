@@ -10,19 +10,38 @@ logger = logging.getLogger(__name__)
 
 
 class Transcriber:
-    """Wraps sherpa-onnx + Parakeet-TDT. Creates the recognizer once."""
+    """Wraps sherpa-onnx + Parakeet-TDT.
+
+    load()/unload() let the caller free the model's VRAM/RAM (~600MB on the
+    default checkpoint) when Nova is paused, and rebuild it on resume without
+    creating a new Transcriber.
+    """
 
     def __init__(self, model_dir: str, device: str = "cpu") -> None:
-        d = Path(model_dir)
-        provider = "cuda" if device == "cuda" else "cpu"
+        self._dir = Path(model_dir)
+        self._device = device
+        self._recognizer: sherpa_onnx.OfflineRecognizer | None = None
+        self.load()
+
+    @property
+    def loaded(self) -> bool:
+        return self._recognizer is not None
+
+    def load(self) -> None:
+        if self._recognizer is not None:
+            return
+        provider = "cuda" if self._device == "cuda" else "cpu"
         try:
-            self._recognizer = self._build(d, provider)
+            self._recognizer = self._build(self._dir, provider)
         except Exception:
             if provider == "cuda":
                 logger.warning("CUDA provider unavailable, falling back to CPU.")
-                self._recognizer = self._build(d, "cpu")
+                self._recognizer = self._build(self._dir, "cpu")
             else:
                 raise
+
+    def unload(self) -> None:
+        self._recognizer = None
 
     @staticmethod
     def _build(model_dir: Path, provider: str) -> sherpa_onnx.OfflineRecognizer:
@@ -39,6 +58,8 @@ class Transcriber:
 
     def transcribe(self, samples: np.ndarray, sample_rate: int = 16000) -> str:
         """samples: float32 mono in [-1, 1]. Returns the text (may be empty)."""
+        if self._recognizer is None:
+            return ""
         if samples.ndim > 1:
             samples = samples.reshape(-1)
         samples = np.ascontiguousarray(samples, dtype=np.float32)

@@ -16,7 +16,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pyinstaller>=6.0"]
+dev = [
+    "pytest>=8.0",
+    "pyinstaller>=6.0",
+    "soundfile>=0.14.0",
+]
 
 [project.scripts]
 nova = "wisper.app:main"

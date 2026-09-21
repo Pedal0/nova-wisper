@@ -27,3 +27,32 @@ def test_transcribe_silence_returns_empty_or_short():
     text = t.transcribe(silence, sample_rate=16000)
     assert isinstance(text, str)
     assert len(text.strip()) <= 3  # silence -> rien (ou quasi)
+
+
+def test_unload_frees_recognizer_and_transcribe_is_a_safe_noop():
+    t = Transcriber(str(MODEL_DIR), device="cpu")
+    assert t.loaded is True
+    t.unload()
+    assert t.loaded is False
+    text = t.transcribe(np.ones(16000, dtype=np.float32), sample_rate=16000)
+    assert text == "" 
+
+
+def test_reload_after_unload_works_again():
+    import soundfile as sf
+    wav = next(MODEL_DIR.glob("test_wavs/*.wav"))
+    samples, sr = sf.read(wav, dtype="float32")
+
+    t = Transcriber(str(MODEL_DIR), device="cpu")
+    t.unload()
+    t.load()
+    assert t.loaded is True
+    text = t.transcribe(samples, sample_rate=sr)
+    assert len(text.strip()) > 0
+
+
+def test_load_is_idempotent_when_already_loaded():
+    t = Transcriber(str(MODEL_DIR), device="cpu")
+    recognizer_before = t._recognizer
+    t.load()
+    assert t._recognizer is recognizer_before
